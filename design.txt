@@ -1,0 +1,884 @@
+TACTIVE INTERNSHIP HIRING ASSESSMENT
+AI-Powered QA Automation,Documentation & Software Engineering
+Detailed Project DocumentationProposed Scenario: Turf Slot Booking SystemBackend: Go
+Item
+Details
+Assessment
+Tactive Internship Hiring Assessment
+Duration
+One week
+Application
+Turf Slot Booking and Reservation System
+Core problem
+Availability validation and conflict-free slot booking
+Frontend
+React + Vite
+Backend
+Go
+HTTP layer
+Chi router
+Database
+PostgreSQL
+Database access
+pgx / database/sql
+Authentication
+JWT or secure session approach
+Testing
+Go testing + httptest + Playwright
+AI assistance
+ChatGPT and/or Cursor, using the exact tools actually used
+Evidence
+Blueprint; replace placeholders with actual results before submission
+IMPORTANT: Never present planned test counts, AI attempts, screenshots, or results as completed evidence until actually executed.
+1. Executive Summary
+The Tactive assessment is a one-week build-it-yourself engineering exercise. The candidate must create a working web application, use AI to generate and execute automated tests, deliberately demonstrate that tests detect a broken application, use an AI-driven change loop to implement a new feature and recover from regressions, and produce professional documentation, presentation material and a five-minute demo.
+This documentation proposes a Turf Slot Booking System using React + Vite, a Go backend, and PostgreSQL. Authenticated users can view turf slots and reserve an available slot while the backend prevents conflicting active bookings. The scenario provides business rules, validation, authorization, state transitions, concurrency concerns and useful negative tests.
+The central engineering story is the build → test → break → detect → fix → retest loop. AI is an assistant, not the verification mechanism.
+2. Assessment Alignment
+The uploaded assessment brief states that AI use is allowed and expected and evaluates completeness, complexity, AI orchestration, security, documentation/communication and failure handling. It requires a runnable repository, executed automated tests including a deliberate red run, an AI change-loop evidence log, architecture/design/user documentation, presentation material and a five-minute video.
+Criterion
+Weight
+Project response
+Completeness
+25%
+Working booking application, tests and complete change loop.
+Complexity and ambition
+20%
+Availability, conflict prevention, validation, authorization, cancellation and concurrency.
+AI orchestration
+20%
+AI-assisted implementation, test generation, deliberate failure and iterative repair.
+Security
+15%
+Authentication, authorization, validation and secret management.
+Documentation and communication
+15%
+Architecture, design, user guide, README, evidence, slides and demo.
+Handling failure
+5%
+Controlled defect, actual red run, root cause and fix.
+3. Problem Statement
+A turf-booking system must ensure that a user receives a confirmed reservation only when the selected slot is available. Frontend availability is not sufficient because multiple requests can arrive close together. The Go backend and database must be authoritative.
+Core problem
+Build a small web application where an authenticated user selects a turf, date and time slot and creates a booking. The system must prevent more than one active confirmed booking for the same slot.
+Why this scenario works
+Real business workflow rather than generic CRUD.
+Clear rules become automated tests.
+Normal, edge and invalid-input cases are meaningful.
+Authentication and ownership create security cases.
+Cancellation creates a state transition and regression opportunity.
+Go demonstrates explicit handlers, services, database access and concurrency-aware backend design.
+Scope is small enough for one week.
+4. Goals and Non-Goals
+4.1 Goals
+Runnable React + Go application.
+Authenticated turf/slot browsing.
+Booking of available slots.
+Backend/database duplicate-booking protection.
+Validation and authorization.
+Automated tests that can fail.
+Genuine deliberate red run.
+AI change loop for a meaningful feature.
+Professional evidence and documentation.
+4.2 Non-Goals
+Real payment gateway.
+Microservices.
+Real-time chat.
+Advanced recommendations.
+Complex analytics.
+Kubernetes/cloud infrastructure not needed for evaluation.
+Unrelated feature expansion.
+5. Functional Requirements
+ID
+Requirement
+Description
+FR-01
+Authentication
+User can log in with valid credentials.
+FR-02
+Turf listing
+System displays available turfs.
+FR-03
+Slot listing
+User views slots for a turf/date.
+FR-04
+Availability
+System identifies active bookings.
+FR-05
+Booking
+Authenticated user reserves an available slot.
+FR-06
+Conflict prevention
+Second active booking for same slot is rejected.
+FR-07
+Validation
+Invalid IDs, dates and missing fields are rejected safely.
+FR-08
+Authorization
+User cannot modify another user's booking.
+FR-09
+Booking history
+User views their own bookings.
+FR-10
+Cancellation
+Eligible booking can be cancelled and slot released.
+6. Business Rules and Edge Cases
+ID
+Rule
+Expected behavior
+BR-01
+One active booking per slot
+Only one CONFIRMED booking may exist.
+BR-02
+Authentication
+Booking changes require authentication.
+BR-03
+Past dates
+Past dates are rejected.
+BR-04
+Valid slot
+Requested slot must exist and match context.
+BR-05
+Duplicate booking
+Second attempt returns controlled conflict.
+BR-06
+Ownership
+User may modify only own booking.
+BR-07
+Cancellation window
+Cancellation allowed only before deadline.
+BR-08
+Release
+Successful cancellation makes slot available.
+BR-09
+Required fields
+Missing fields return validation errors.
+BR-10
+Secrets
+No secrets/credentials are committed.
+BR-11
+Atomicity
+Failed DB operation does not leave partial state.
+BR-12
+Concurrency
+Concurrent same-slot requests result in at most one active booking.
+Two users book the same slot simultaneously.
+Already-booked slot.
+Past date.
+Unknown slot/turf.
+Empty or malformed JSON.
+Missing/invalid authentication.
+Access to another user's booking.
+Late cancellation.
+Rebooking a cancelled slot.
+Database constraint/transaction error.
+7. System Architecture
+                         React + Vite                              |                         REST / JSON                              |                    Go HTTP Server + Chi                              |        +---------------------+---------------------+        |                     |                     |   Auth Middleware       HTTP Handlers        Logging/Errors                              |                       Booking Service                              |                       Repository Layer                              |                          PostgreSQL                              |             Go tests + httptest + Playwright                              |                    AI Engineering Loop
+7.1 Go layers
+Layer
+Responsibility
+cmd/server
+Application entry point and startup/shutdown.
+internal/http
+Routes, handlers, middleware and HTTP mapping.
+internal/service
+Business rules/use cases.
+internal/repository
+SQL queries and persistence.
+internal/model
+Domain/data structures.
+internal/auth
+Token/session validation and identity extraction.
+internal/config
+Environment/configuration.
+internal/database
+Connection pool and database setup.
+migrations
+Versioned database schema changes.
+Keep handlers thin: decode/validate HTTP input, obtain authenticated identity, call a service, map domain errors to HTTP status, and encode JSON. Business rules belong in the service/domain layer and database invariants belong in the database.
+8. Technology Choices
+Technology
+Purpose
+Reason
+React + Vite
+Frontend
+Fast component-based UI.
+Go
+Backend
+Strong typing, simple deployment, explicit server structure and concurrency support.
+Chi
+Routing
+Small idiomatic router with middleware.
+PostgreSQL
+Database
+Relational constraints and transaction support.
+pgx / database/sql
+DB access
+Explicit SQL and transaction control.
+JWT or secure session
+Authentication
+Simple authenticated API model.
+Go testing
+Unit/API tests
+Built into Go.
+httptest
+HTTP tests
+Tests handlers without browser.
+Playwright
+E2E
+Real browser workflow/evidence.
+Git/GitHub
+Version control
+Reproducibility.
+ChatGPT/Cursor
+AI assistance
+Implementation, testing, diagnosis and documentation.
+These are proposed implementation choices. Keep the final README consistent with the tools actually used.
+9. Data Model
+9.1 User
+Field
+Type
+Rules
+id
+UUID
+PK
+name
+VARCHAR
+Required
+email
+VARCHAR
+Required, unique
+password_hash
+VARCHAR
+Never plaintext
+created_at
+TIMESTAMP
+Automatic
+9.2 Turf
+Field
+Type
+Rules
+id
+UUID
+PK
+name
+VARCHAR
+Required
+location
+VARCHAR
+Required
+price_per_hour
+NUMERIC
+Non-negative
+9.3 Slot
+Field
+Type
+Rules
+id
+UUID
+PK
+turf_id
+UUID
+FK
+date
+DATE
+Required
+start_time
+TIME
+Required
+end_time
+TIME
+Required
+9.4 Booking
+Field
+Type
+Rules
+id
+UUID
+PK
+user_id
+UUID
+FK
+slot_id
+UUID
+FK
+status
+ENUM/VARCHAR
+CONFIRMED/CANCELLED
+created_at
+TIMESTAMP
+Automatic
+cancelled_at
+TIMESTAMP
+Nullable
+User 1 -------- * Booking * -------- 1 Slot                                      |                                      1                                      |                                    Turf
+9.5 Database-level protection
+Do not rely only on SELECT-then-INSERT. A PostgreSQL partial unique index can enforce the core invariant:
+CREATE UNIQUE INDEX unique_active_booking_per_slotON bookings(slot_id)WHERE status = 'CONFIRMED';
+The exact SQL must match the final schema. The Go repository/service should translate a uniqueness violation into a controlled 409 Conflict response.
+10. API Design
+Method
+Endpoint
+Purpose
+Expected
+POST
+/api/auth/login
+Authenticate
+200/401
+GET
+/api/turfs
+List turfs
+200
+GET
+/api/slots?turf_id=&date=
+List slots
+200/400
+POST
+/api/bookings
+Create booking
+201/400/401/409
+GET
+/api/bookings
+Current user's bookings
+200/401
+GET
+/api/bookings/{id}
+Own booking
+200/403/404
+POST
+/api/bookings/{id}/cancel
+Cancel booking
+200/400/403/404
+POST /api/bookingsAuthorization: Bearer <token>Content-Type: application/json{"slot_id":"2a8f..."}
+201 Created{"id":"7b21...","slot_id":"2a8f...","status":"CONFIRMED"}
+409 Conflict{"error":"SLOT_ALREADY_BOOKED", "message":"The selected slot is no longer available."}
+11. Core Application Flows
+11.1 Login
+Login -> POST /auth/login       -> invalid: 401       -> valid: token/session -> Booking UI
+11.2 Booking
+Select turf/date      -> GET /slots      -> choose available slot      -> POST /bookings      -> Go handler      -> booking service      -> PostgreSQL constraint/transaction         -> conflict: 409         -> success: 201
+11.3 Cancellation
+Own confirmed booking -> POST /bookings/{id}/cancel -> ownership check -> deadline check -> status CANCELLED -> slot bookable again -> 200 OK
+11.4 Concurrent booking
+Request A ----                > PostgreSQL invariant -> exactly one active bookingRequest B ----/                         -> loser gets 409
+This is important: UI checks cannot guarantee correctness under concurrency. The database must enforce the invariant.
+12. Validation, Error Handling and Security
+12.1 Validation
+Reject missing fields.
+Reject malformed JSON and UUIDs.
+Controlled 404 for unknown resources.
+Reject past dates where required.
+Verify slot context.
+Never trust browser-supplied user_id for ownership.
+Use sensible request/body limits.
+12.2 Authentication/authorization
+Booking creation requires authentication.
+Booking history is scoped to current user.
+Modification checks ownership.
+Do not expose another user's booking data.
+Authentication middleware places verified identity in request context.
+12.3 Go server concerns
+Use request context for cancellation and DB calls.
+Configure HTTP read/write/idle timeouts.
+Never return stack traces/raw SQL errors.
+Use structured logs without secrets.
+Manage DB pool lifecycle.
+Handle graceful shutdown.
+12.4 Secrets
+Environment variables for DB URL/JWT secret.
+Commit only .env.example.
+Add .env to .gitignore.
+Never show credentials in evidence.
+HTTP
+Meaning
+Example
+400
+Bad request
+Invalid input/business rule
+401
+Unauthorized
+Missing/invalid auth
+403
+Forbidden
+Authenticated but not allowed
+404
+Not found
+Unknown resource
+409
+Conflict
+Slot already booked
+13. Go Project Structure
+tactive-assessment/├── backend/│   ├── cmd/server/main.go│   ├── internal/│   │   ├── auth/│   │   ├── http/handlers/│   │   ├── http/middleware/│   │   ├── http/routes/│   │   ├── model/│   │   ├── service/│   │   ├── repository/│   │   ├── config/│   │   └── database/│   ├── migrations/│   ├── go.mod│   └── go.sum├── frontend/│   ├── src/components/│   ├── src/pages/│   ├── src/services/│   └── package.json├── tests/e2e/├── docs/├── evidence/├── presentation/├── README.md├── .env.example└── .gitignore
+14. AI-Assisted Development Strategy
+Write requirements/business rules first.
+Ask AI for edge cases and failure modes.
+Ask AI for a simple Go package structure.
+Implement one slice at a time.
+Run application after meaningful changes.
+Ask AI to generate Go/API and Playwright tests.
+Execute tests independently and retain evidence.
+Introduce controlled defect and verify a real failure.
+Give AI the cancellation feature.
+Run full suite after changes.
+Use actual failure output for diagnosis.
+Record prompts, edits, failures, fixes and attempts.
+Manually review all AI code.
+Tool
+Purpose
+Evidence
+ChatGPT
+Architecture, requirements, testing, docs, review
+Prompts/outputs
+Cursor/agent
+Repository implementation/change loop
+Prompt history/diffs
+Go tests/Playwright
+Verification
+Terminal/reports
+15. AI-Generated Test Automation
+Tests must actually execute and cover normal, edge and invalid inputs. A suite that only passes is not enough.
+ID
+Scenario
+Expected
+TC-01
+Successful booking
+201 confirmed
+TC-02
+Duplicate booking
+409, no second active booking
+TC-03
+Past date
+Validation error
+TC-04
+Missing slot_id
+400
+TC-05
+Invalid slot
+404/controlled error
+TC-06
+Unauthenticated
+401
+TC-07
+Unauthorized access
+403/404
+TC-08
+Cancellation success
+Cancelled + released
+TC-09
+Late cancellation
+Business-rule error
+TC-10
+Concurrent booking
+Exactly one succeeds
+TC-11
+Malformed JSON
+400
+TC-12
+Regression
+Existing suite green
+Layer
+Tool
+Purpose
+Unit
+go test
+Service/domain rules
+HTTP/API
+httptest + Go test
+Handlers/middleware/status
+Integration
+Go + test DB
+Persistence/constraints
+E2E
+Playwright
+Real browser workflow
+16. Deliberate Red Run
+The assessment explicitly requires at least one run where the application is deliberately broken and a test catches it.
+Recommended defect
+Temporarily remove/bypass duplicate-booking protection while keeping the duplicate-booking test unchanged.
+Expected:First booking  -> 201Second booking -> 409Broken state:Second booking is incorrectly accepted.Red run:Duplicate-booking test FAILS.Restore:Correct protection + re-run suite -> GREEN.
+Go/PostgreSQL variant
+If the implementation uses a DB uniqueness constraint, temporarily remove the constraint or break the mapping of a database uniqueness error to HTTP 409. Capture the failure, root cause, fix and final green run.
+Test name + requirement.
+Actual code/schema change.
+Actual terminal/test output.
+Screenshot/report.
+Root cause.
+Fix.
+Final green run.
+Never invent pass/fail counts.
+17. AI Change Loop — Core Demonstration
+Feature: allow a user to cancel their own confirmed booking at least two hours before the slot. Cancellation marks the booking CANCELLED and releases the slot.
+Give AI feature request + repository.
+Ask it to inspect affected handlers/services/repositories/tests.
+Implement smallest coherent change.
+Run complete suite.
+Capture failures.
+Give actual failure output back to AI.
+Allow correction.
+Run complete suite again.
+Repeat until verified.
+Record every attempt/manual intervention.
+Adds state transition.
+Changes availability.
+Requires ownership.
+Requires time-window rule.
+Can cause regressions.
+Exercises handler → service → repository boundaries.
+18. AI Change-Loop Evidence Log
+Field
+Record after execution
+Change ID
+CL-01
+Feature request
+[Exact request]
+AI tool
+[Actual tool]
+Starting commit
+[Hash]
+Prompt
+[Exact prompt]
+Attempt 1 changes
+[Files/functions]
+Test command
+[Exact command]
+Result
+[Actual output]
+Failures
+[Actual failures]
+Root cause
+[Diagnosis]
+Correction
+[Actual fix]
+Final result
+[Actual output]
+Total attempts
+[Actual number]
+Manual intervention
+[Exact intervention]
+CHANGE LOOP CL-01Feature:Cancel eligible user bookings.Prompt:[Exact prompt]Attempt 1:Changed files: ...Test command: ...Result: ...Failures: ...Diagnosis: ...Correction: ...Attempt 2:Result: ...Final state: PASS / PARTIAL / FAILEDManual intervention: ...Lesson: ...
+19. Test Plan
+ID
+Scenario
+Priority
+Type
+TC-01
+Valid login
+High
+Functional
+TC-02
+Invalid login
+High
+Security
+TC-03
+List slots
+High
+Functional
+TC-04
+Book available slot
+Critical
+Functional
+TC-05
+Duplicate booking
+Critical
+Regression
+TC-06
+Past date
+Medium
+Validation
+TC-07
+Missing slot_id
+Medium
+Validation
+TC-08
+Unknown slot
+Medium
+Validation
+TC-09
+Unauthenticated booking
+High
+Security
+TC-10
+Unauthorized access
+High
+Authorization
+TC-11
+Cancel eligible booking
+High
+Feature
+TC-12
+Cancel too late
+High
+Business rule
+TC-13
+Released slot available
+High
+State transition
+TC-14
+Concurrent booking
+Critical
+Concurrency
+TC-15
+Malformed JSON
+Medium
+Validation
+20. Documentation Set
+20.1 Architecture
+Purpose/scope.
+System context.
+React/Go/PostgreSQL components.
+Handler → service → repository flow.
+Authentication boundary.
+DB constraint/transaction strategy.
+Testing architecture.
+AI loop.
+Technology rationale.
+20.2 Design
+Data model.
+API design.
+Booking/cancellation state transitions.
+Validation.
+Error handling.
+Security.
+Concurrency/transactions.
+Testing strategy.
+20.3 User guide
+Login.
+Select turf/date.
+View slots.
+Create booking.
+View history.
+Cancel eligible booking.
+Understand common errors.
+21. User Guide
+21.1 Login
+Open app.
+Enter email/password.
+Click Login.
+Booking UI appears.
+21.2 Create booking
+Select turf.
+Select future date.
+Review slots.
+Choose Available.
+Click Book.
+Confirm.
+Check My Bookings.
+21.3 Conflict
+If the slot becomes unavailable before the request completes, Go/PostgreSQL rejects it and the UI displays a conflict rather than false success.
+21.4 Cancel
+Open My Bookings.
+Select eligible confirmed booking.
+Click Cancel.
+Confirm.
+Verify CANCELLED.
+Verify slot is available again.
+22. Build and Test Commands
+22.1 Go backend
+cd backendgo mod download# configure environment# run migrationsgo run ./cmd/server
+22.2 Go tests
+go test ./...go test -race ./...
+Only report race-detector results if actually executed.
+22.3 React
+cd frontendnpm installnpm run dev
+22.4 Playwright
+npx playwright test
+Exact commands must match the final repository.
+23. README Requirements
+# Tactive Turf Booking Assessment## Overview## Features## Architecture## Prerequisites## PostgreSQL setup## Backend setup## Environment variables## Migrations## Running Go## Running React## Go tests## Playwright tests## Test evidence## AI tools## AI change loop## Known limitations## Troubleshooting
+Perform a clean-clone verification exactly as an evaluator would.
+24. Presentation Plan
+Slide
+Title
+Content
+1
+Title
+Tactive Assessment — AI-Assisted Turf Booking QA System
+2
+Problem
+Booking conflicts and backend validation
+3
+Solution
+Workflow and business rules
+4
+Architecture
+React → Go/Chi → PostgreSQL + tests
+5
+Go Backend
+Handler → service → repository + DB constraint
+6
+AI QA
+AI-generated tests and execution
+7
+Red Run
+Deliberate defect and actual failure
+8
+AI Change Loop
+Cancellation → regression → diagnosis → fix
+9
+Security
+Auth, authorization, validation, secrets
+10
+Results
+Actual test evidence
+11
+Conclusion
+Lessons and limitations
+25. Five-Minute Video Plan
+Time
+Section
+What to show
+0:00–0:30
+Problem
+Booking conflict and scope
+0:30–1:00
+Architecture
+React → Go → PostgreSQL
+1:00–2:00
+Solution
+Login → turf → date → booking
+2:00–2:45
+Backend
+Go API/structure/conflict handling
+2:45–3:30
+Testing
+Automated test/conflict behavior
+3:30–4:30
+AI loop
+Feature → failure → diagnosis → fix
+4:30–5:00
+Final state
+Actual passing result, security and lessons
+26. One-Week Execution Plan
+Day
+Focus
+Deliverable
+1
+Foundation
+React, Go server, PostgreSQL, auth, models/migrations
+2
+Booking
+Availability, booking, validation, conflict prevention, authorization
+3
+Testing
+AI-generated Go/API + Playwright tests, baseline run
+4
+AI loop
+Deliberate red run + cancellation change loop
+5
+Docs
+Architecture, design, user guide, evidence, README
+6
+Presentation
+Slides + demo recordings
+7
+Final QA
+Clean clone, migrations, tests, evidence, packaging
+27. Evaluation Strategy
+Area
+Final verification
+Completeness — 25%
+Does app run and does change loop close?
+Complexity — 20%
+Are there real business rules, edge cases and backend behavior?
+AI orchestration — 20%
+Is AI directed intelligently and verified by tests?
+Security — 15%
+Are auth, authorization, validation and secrets safe?
+Documentation — 15%
+Can evaluator understand and run it?
+Failure handling — 5%
+Is red run genuine and honestly diagnosed?
+Completeness and AI orchestration together account for 45% of the stated weighting.
+28. Risks and Mitigations
+Risk
+Impact
+Mitigation
+Scope creep
+Incomplete system
+Freeze scope around booking + cancellation.
+AI bugs
+Incorrect behavior
+Run tests after meaningful changes.
+Weak tests
+Low QA value
+Test business rules, edge and invalid inputs.
+No red run
+Missed evidence
+Create one controlled defect.
+Secrets committed
+Security issue
+Env vars + .gitignore.
+Cannot explain code
+Poor defense
+Review every AI change.
+Broken setup
+Evaluator blocked
+Clean-clone verification.
+DB race condition
+Duplicate bookings
+DB constraint + transaction/concurrency test.
+Fake results
+Assessment issue
+Only record actual execution evidence.
+29. Final Submission Checklist
+☐ Fresh clone runs successfully.
+☐ PostgreSQL setup documented.
+☐ Go backend starts from README.
+☐ React frontend starts from README.
+☐ Database migrations included.
+☐ README has setup/test commands.
+☐ Source and tests included.
+☐ Normal/edge/invalid tests included.
+☐ Concurrency behavior tested.
+☐ Deliberate red run captured.
+☐ Defect restored/fixed.
+☐ AI prompts recorded.
+☐ AI changes recorded.
+☐ Failures/corrections recorded.
+☐ Attempt count recorded.
+☐ Manual intervention stated.
+☐ Architecture complete.
+☐ Design complete.
+☐ User guide complete.
+☐ Security review complete.
+☐ No secrets committed.
+☐ Presentation complete.
+☐ Five-minute video complete.
+☐ All placeholders replaced with actual evidence.
+☐ Known limitations documented.
+30. AI Prompt Templates
+30.1 Go architecture
+Act as a senior Go backend architect.Build a small turf slot booking application for an engineering assessment.Stack: React, Go, Chi, PostgreSQL.Core invariant: one active booking per slot.Propose a simple package architecture, data model, REST API, validation,authentication/authorization, transaction/concurrency strategy, tests andfailure modes. Avoid unnecessary technologies. Optimize for a completeone-week submission.
+30.2 Test generation
+Act as a senior QA automation engineer with Go experience.Inspect this turf booking application's requirements and implementation.Generate Go unit/API tests and Playwright tests for successful booking,duplicate booking, concurrent booking, invalid input, authentication,authorization, cancellation, cancellation deadline and released-slotbehavior.Tests must fail if the application is broken. Never weaken a test just tomake it pass.
+30.3 Change loop
+You are modifying an existing Go + React repository.Feature:Allow a user to cancel their own confirmed booking at least two hoursbefore the slot. Cancellation marks it CANCELLED and makes the slotbookable again.Inspect before editing. Identify handlers, services, repositories andtests. Implement the smallest coherent change. Run the complete suite.Do not hide or weaken tests. Diagnose failures from actual output, correctthe implementation, rerun, and report every attempt and manual intervention.Do not claim success without actual passing results.
+30.4 Code review
+Review this Go backend as a Tactive assessment evaluator.Check correctness, booking conflict prevention, database constraints,transactions, authentication, authorization, validation, error handling,context usage, server timeouts, secrets, tests, README reproducibility andAI evidence. Identify concrete risks.
+30.5 Evidence integrity
+Review my assessment evidence and separate planned behavior,implemented behavior, actual execution results, and unverified claims.Flag anything presented as a test result or successful AI iteration withoutactual execution evidence.
+31. Definition of Done
+Area
+Done when
+Frontend
+User completes login → slot → booking → history → cancellation.
+Backend
+Go API handles auth, validation, booking and cancellation.
+Database
+Migrations exist and active-booking uniqueness is enforced.
+Concurrency
+Concurrent same-slot attempts produce at most one active booking.
+Tests
+Go/API/E2E tests execute and detect meaningful failures.
+Red run
+Controlled defect creates real failure and is fixed.
+AI loop
+Meaningful feature implemented through recorded AI attempts and verified.
+Security
+No secrets; ownership/auth enforced.
+Docs
+Evaluator understands architecture/design/usage.
+Submission
+Slides/video/evidence use actual results.
+32. Source and Scope Note
+Assessment-specific requirements in this document are derived from the uploaded Tactive brief. The brief permits the candidate to choose the application scenario and technology stack; therefore the Turf Slot Booking System, Go architecture, API, data model, tests and prompts are proposed implementation choices rather than requirements stated by Tactive itself. Replace/adapt them as needed while remaining aligned with the brief. All execution results, screenshots, pass/fail counts, AI attempts and timings must come from the actual project.
