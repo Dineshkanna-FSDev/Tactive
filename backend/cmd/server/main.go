@@ -268,8 +268,8 @@ func main() {
 			userID := req.Context().Value("user_id").(string)
 
 			// Update booking status to CANCELLED
-			// INTENTIONAL BUG for AI Change Loop: Typo in SQL query 'WHRE' instead of 'WHERE'
-			query := `UPDATE bookings SET status = 'CANCELLED' WHRE id = $1 AND user_id = $2`
+			// BUG FIXED: Corrected 'WHRE' to 'WHERE'
+			query := `UPDATE bookings SET status = 'CANCELLED' WHERE id = $1 AND user_id = $2`
 			_, err := dbPool.Exec(context.Background(), query, bookingID, userID)
 			if err != nil {
 				http.Error(w, "Failed to process cancellation", http.StatusInternalServerError)
