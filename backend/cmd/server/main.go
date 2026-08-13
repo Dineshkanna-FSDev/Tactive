@@ -12,9 +12,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 )
+
+var jwtKey = []byte("my_super_secret_tactive_key")
 
 type Turf struct {
 	ID           string  `json:"id"`
@@ -28,21 +32,59 @@ type Slot struct {
 	TurfID    string `json:"turf_id"`
 	StartTime string `json:"start_time"`
 	EndTime   string `json:"end_time"`
+	IsBooked  bool   `json:"is_booked"`
 }
 
 type BookingRequest struct {
-	UserID string `json:"user_id"`
 	SlotID string `json:"slot_id"`
 }
 
-func main() {
-	// 1. Load environment variables
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found, relying on system environment variables")
-	}
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
-	// 2. Connect to PostgreSQL
+type UserBooking struct {
+	BookingID string `json:"booking_id"`
+	TurfName  string `json:"turf_name"`
+	Location  string `json:"location"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	Status    string `json:"status"`
+}
+
+type Claims struct {
+	UserID string `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, "Unauthorized: Missing Token", http.StatusUnauthorized)
+			return
+		}
+
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+		})
+
+		if err != nil || !token.Valid {
+			http.Error(w, "Unauthorized: Invalid Token", http.StatusUnauthorized)
+			return
+		}
+
+		// Store user_id in the request context so our routes can access it
+		ctx := context.WithValue(r.Context(), "user_id", claims.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func main() {
+	godotenv.Load()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL environment variable is required")
@@ -59,17 +101,49 @@ func main() {
 	}
 	fmt.Println("✅ Successfully connected to PostgreSQL database!")
 
-	// 3. Set up Router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Server is healthy!"))
+	// --- PUBLIC ROUTES ---
+	r.Post("/api/auth/login", func(w http.ResponseWriter, req *http.Request) {
+		var creds LoginRequest
+		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		var id, hash, name string
+		err := dbPool.QueryRow(context.Background(), "SELECT id, name, password_hash FROM users WHERE email=$1", creds.Email).Scan(&id, &name, &hash)
+		if err != nil {
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(creds.Password)); err != nil {
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			return
+		}
+
+		expirationTime := time.Now().Add(24 * time.Hour)
+		claims := &Claims{
+			UserID: id,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(expirationTime),
+			},
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString(jwtKey)
+		if err != nil {
+			http.Error(w, "Error generating token", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": tokenString, "name": name})
 	})
 
-	// Fetch all turfs
 	r.Get("/api/turfs", func(w http.ResponseWriter, req *http.Request) {
 		rows, err := dbPool.Query(context.Background(), "SELECT id, name, location, price_per_hour FROM turfs")
 		if err != nil {
@@ -91,9 +165,14 @@ func main() {
 		json.NewEncoder(w).Encode(turfs)
 	})
 
-	// Fetch all slots
 	r.Get("/api/slots", func(w http.ResponseWriter, req *http.Request) {
-		rows, err := dbPool.Query(context.Background(), "SELECT id, turf_id, start_time, end_time FROM slots")
+		query := `
+			SELECT s.id, s.turf_id, s.start_time, s.end_time, 
+			       CASE WHEN b.id IS NOT NULL THEN true ELSE false END as is_booked
+			FROM slots s
+			LEFT JOIN bookings b ON s.id = b.slot_id AND b.status = 'CONFIRMED'
+		`
+		rows, err := dbPool.Query(context.Background(), query)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
@@ -103,12 +182,11 @@ func main() {
 		var slots []Slot
 		for rows.Next() {
 			var s Slot
-			var startTime, endTime time.Time // We use time.Time to read timestamps from Postgres
-			if err := rows.Scan(&s.ID, &s.TurfID, &startTime, &endTime); err != nil {
+			var startTime, endTime time.Time
+			if err := rows.Scan(&s.ID, &s.TurfID, &startTime, &endTime, &s.IsBooked); err != nil {
 				http.Error(w, "Error reading data", http.StatusInternalServerError)
 				return
 			}
-			// Convert to string for JSON output
 			s.StartTime = startTime.Format(time.RFC3339)
 			s.EndTime = endTime.Format(time.RFC3339)
 			slots = append(slots, s)
@@ -117,34 +195,90 @@ func main() {
 		json.NewEncoder(w).Encode(slots)
 	})
 
-	// Create a Booking (The core assessment feature!)
-	r.Post("/api/bookings", func(w http.ResponseWriter, req *http.Request) {
-		var b BookingRequest
-		if err := json.NewDecoder(req.Body).Decode(&b); err != nil {
-			http.Error(w, "Invalid JSON body", http.StatusBadRequest)
-			return
-		}
+	// --- PROTECTED ROUTES (Requires JWT) ---
+	r.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware)
 
-		// Try to insert the booking
-		_, err := dbPool.Exec(context.Background(), 
-			"INSERT INTO bookings (user_id, slot_id, status) VALUES ($1, $2, 'CONFIRMED')", 
-			b.UserID, b.SlotID)
-		
-		if err != nil {
-			// Catch our PostgreSQL Unique Constraint Error!
-			if strings.Contains(err.Error(), "23505") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusConflict) // 409 Conflict
-				w.Write([]byte(`{"error": "SLOT_ALREADY_BOOKED", "message": "Sorry, someone just booked this slot!"}`))
+		r.Post("/api/bookings", func(w http.ResponseWriter, req *http.Request) {
+			userID := req.Context().Value("user_id").(string) // Extracted securely from the JWT token!
+			
+			var b BookingRequest
+			if err := json.NewDecoder(req.Body).Decode(&b); err != nil {
+				http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 				return
 			}
-			http.Error(w, "Database error", http.StatusInternalServerError)
-			return
-		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated) // 201 Created
-		w.Write([]byte(`{"status": "SUCCESS", "message": "Booking Confirmed!"}`))
+			_, err := dbPool.Exec(context.Background(), 
+				"INSERT INTO bookings (user_id, slot_id, status) VALUES ($1, $2, 'CONFIRMED')", 
+				userID, b.SlotID)
+			
+			if err != nil {
+				if strings.Contains(err.Error(), "23505") {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte(`{"error": "SLOT_ALREADY_BOOKED", "message": "Sorry, someone just booked this slot!"}`))
+					return
+				}
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			w.Write([]byte(`{"status": "SUCCESS", "message": "Booking Confirmed!"}`))
+		})
+
+		r.Get("/api/user/bookings", func(w http.ResponseWriter, req *http.Request) {
+			userID := req.Context().Value("user_id").(string)
+			
+			query := `
+				SELECT b.id, t.name, t.location, s.start_time, s.end_time, b.status
+				FROM bookings b
+				JOIN slots s ON b.slot_id = s.id
+				JOIN turfs t ON s.turf_id = t.id
+				WHERE b.user_id = $1
+				ORDER BY s.start_time DESC
+			`
+			rows, err := dbPool.Query(context.Background(), query, userID)
+			if err != nil {
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+			defer rows.Close()
+
+			var bookings []UserBooking
+			for rows.Next() {
+				var b UserBooking
+				var startTime, endTime time.Time
+				if err := rows.Scan(&b.BookingID, &b.TurfName, &b.Location, &startTime, &endTime, &b.Status); err != nil {
+					http.Error(w, "Error reading data", http.StatusInternalServerError)
+					return
+				}
+				b.StartTime = startTime.Format(time.RFC3339)
+				b.EndTime = endTime.Format(time.RFC3339)
+				bookings = append(bookings, b)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(bookings)
+		})
+
+		r.Post("/api/bookings/{id}/cancel", func(w http.ResponseWriter, req *http.Request) {
+			bookingID := chi.URLParam(req, "id")
+			userID := req.Context().Value("user_id").(string)
+
+			// Update booking status to CANCELLED
+			// INTENTIONAL BUG for AI Change Loop: Typo in SQL query 'WHRE' instead of 'WHERE'
+			query := `UPDATE bookings SET status = 'CANCELLED' WHRE id = $1 AND user_id = $2`
+			_, err := dbPool.Exec(context.Background(), query, bookingID, userID)
+			if err != nil {
+				http.Error(w, "Failed to process cancellation", http.StatusInternalServerError)
+				return
+			}
+			
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status": "SUCCESS"}`))
+		})
 	})
 
 	port := os.Getenv("PORT")
