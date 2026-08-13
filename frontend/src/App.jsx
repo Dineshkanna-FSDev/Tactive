@@ -20,6 +20,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
   const [payAdvance, setPayAdvance] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
 
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -321,7 +322,25 @@ function App() {
 
   const renderSlots = () => {
     if (!selectedTurf) return null
-    const turfSlots = slots.filter(s => s.turf_id === selectedTurf.id)
+    
+    // Generate next 7 days for the date selector
+    const dateOptions = Array.from({length: 7}).map((_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() + i)
+      return {
+        fullDate: d.toISOString().split('T')[0],
+        dayName: i === 0 ? 'TODAY' : d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+        dayNum: d.getDate().toString().padStart(2, '0')
+      }
+    })
+
+    // Filter slots for the selected turf AND the selected date
+    const turfSlots = slots.filter(s => {
+      if (s.turf_id !== selectedTurf.id) return false
+      const slotDate = s.start_time.split('T')[0]
+      return slotDate === selectedDate
+    })
+
     return (
       <>
         <div className="top-header" style={{ padding: '20px 20px 10px 20px' }}>
@@ -342,14 +361,14 @@ function App() {
         </div>
         
         <div className="date-selector">
-           <div className="date-box active">
-             <div className="date-day">TODAY</div>
-             <div className="date-num">03</div>
-           </div>
-           <div className="date-box">
-             <div className="date-day">SAT</div>
-             <div className="date-num">04</div>
-           </div>
+          {dateOptions.map(opt => (
+            <div key={opt.fullDate} 
+                 className={`date-box ${selectedDate === opt.fullDate ? 'active' : ''}`} 
+                 onClick={() => { setSelectedDate(opt.fullDate); setSelectedSlot(null); }}>
+              <div className="date-day">{opt.dayName}</div>
+              <div className="date-num">{opt.dayNum}</div>
+            </div>
+          ))}
         </div>
 
         <div style={{ padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
