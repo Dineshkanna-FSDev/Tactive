@@ -425,7 +425,7 @@ function App() {
           <div className="bill-row total"><span>Grand Total</span><span>₹{total}</span></div>
 
           <div style={{ marginTop: '30px' }} className={`advance-box ${payAdvance ? 'active' : ''}`} onClick={() => setPayAdvance(!payAdvance)}>
-            <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid', borderColor: payAdvance ? 'var(--primary-color)' : 'var(--border-color)', display: 'flex', alignItems: 'center', justify-content: 'center' }}>
+            <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid', borderColor: payAdvance ? 'var(--primary-color)' : 'var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {payAdvance && <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'var(--primary-color)' }}></div>}
             </div>
             <div>
