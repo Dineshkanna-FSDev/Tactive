@@ -21,6 +21,9 @@ function App() {
   const [activeCategory, setActiveCategory] = useState('All')
   const [payAdvance, setPayAdvance] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [splitSessionId, setSplitSessionId] = useState(null)
+  
+  const [timeLeft, setTimeLeft] = useState({ days: '00', hrs: '00', min: '00', sec: '00' })
 
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -28,14 +31,53 @@ function App() {
 
   const fetchData = () => {
     if (token) {
-      fetch('/api/turfs').then(res => res.json()).then(data => setTurfs(data || []))
-      fetch('/api/slots').then(res => res.json()).then(data => setSlots(data || []))
+      fetch('/api/turfs', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json()).then(setTurfs).catch(() => {})
+      fetch('/api/slots', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json()).then(setSlots).catch(() => {})
       fetch('/api/user/bookings', { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => res.json()).then(data => setUserBookings(data || []))
+        .then(r => r.json()).then(setUserBookings).catch(() => {})
     }
   }
 
-  useEffect(() => { fetchData() }, [token])
+  useEffect(() => {
+    fetchData()
+  }, [token])
+
+  useEffect(() => {
+    const now = new Date()
+    const upcomingBookings = userBookings.filter(b => new Date(b.start_time) > now && b.status !== 'CANCELLED')
+    upcomingBookings.sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+    const nextBooking = upcomingBookings.length > 0 ? upcomingBookings[0] : null
+
+    if (!nextBooking) return
+
+    const interval = setInterval(() => {
+      const currentTime = new Date()
+      const startTime = new Date(nextBooking.start_time)
+      const diff = startTime - currentTime
+
+      if (diff <= 0) {
+        clearInterval(interval)
+        setTimeLeft({ days: '00', hrs: '00', min: '00', sec: '00' })
+        return
+      }
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hrs = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const min = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const sec = Math.floor((diff % (1000 * 60)) / 1000)
+      
+      setTimeLeft({
+        days: days.toString().padStart(2, '0'),
+        hrs: hrs.toString().padStart(2, '0'),
+        min: min.toString().padStart(2, '0'),
+        sec: sec.toString().padStart(2, '0')
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [userBookings])
 
   const showToast = (type, message) => {
     setToast({ type, message })
@@ -80,6 +122,30 @@ function App() {
     } else {
       const data = await response.json()
       showToast('error', data.message || data.error)
+    }
+  }
+
+  const handleTeamBooking = async () => {
+    if (!selectedSlot || !selectedTurf) return
+    setBookingLoading(true)
+    try {
+      const response = await fetch('/api/team-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ slot_id: selectedSlot.id, target_amount: selectedTurf.price_per_hour }) 
+      })
+      setBookingLoading(false)
+      const data = await response.json()
+      if (response.ok) {
+        showToast('success', 'Team session created! ID: ' + data.session_id)
+        setSplitSessionId(data.session_id)
+        setView('split-share')
+      } else {
+        showToast('error', data.message || data.error)
+      }
+    } catch (err) {
+      setBookingLoading(false)
+      showToast('error', 'Network error.')
     }
   }
 
@@ -142,32 +208,77 @@ function App() {
 
   // --- VIEWS ---
   const renderHome = () => {
-    const upcoming = userBookings.filter(b => b.status === 'CONFIRMED')[0]
+    const now = new Date()
+    const upcomingBookings = userBookings.filter(b => new Date(b.start_time) > now && b.status !== 'CANCELLED')
+    upcomingBookings.sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+    const upcoming = upcomingBookings.length > 0 ? upcomingBookings[0] : null
+
     return (
       <>
-        <div className="top-header">
+        <div className="top-header" style={{ marginBottom: '20px' }}>
           <div className="logo">TURF<span style={{ color: 'var(--primary-color)' }}>BAY</span></div>
           <div className="bell-icon">🔔</div>
         </div>
-        <div className="hero">
-          <h1>Find and book<br/>the best turfs<br/><span>near you.</span></h1>
-          <div className="search-container" onClick={() => setView('explore')}>
-            <input type="text" className="search-input" placeholder="Search location or turf..." readOnly />
-            <button className="search-btn">🔍</button>
-          </div>
+
+        <div className="welcome-pill">
+          Welcome back, {userName ? userName.split(' ')[0] : 'User'}! 👋
+        </div>
+
+        <h1 className="home-epic-title">
+          Let's play<br/>
+          <span>something epic</span><br/>
+          today.
+        </h1>
+
+        <div className="home-search-bar" onClick={() => setView('explore')}>
+          <div style={{ color: 'var(--text-secondary)' }}>📍</div>
+          <input type="text" placeholder="Search location or turf..." readOnly />
+          <button className="home-search-btn">🔍</button>
         </div>
 
         <div className="section-header">
           <h2 className="section-title">Upcoming Booking</h2>
         </div>
+
         {upcoming ? (
-          <div className="upcoming-card" onClick={() => { setSelectedBooking(upcoming); setView('booking-details') }}>
-            <div className="upcoming-icon">📅</div>
-            <div>
-              <h3 style={{ margin: '0 0 5px 0' }}>{upcoming.turf_name}</h3>
-              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '14px' }}>
-                {new Date(upcoming.start_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+          <div className="upcoming-full-card" onClick={() => { setSelectedBooking(upcoming); setView('booking-details') }}>
+            <div className="upcoming-img-section">
+              <img src="/assets/indoor_turf.jpg" alt="turf" onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1518605368461-1ee7e5436660?q=80&w=300&auto=format&fit=crop"; }} />
+              <div className="upcoming-date-badge">
+                <div className="month">{new Date(upcoming.start_time).toLocaleString('default', { month: 'short' })}</div>
+                <div className="day">{new Date(upcoming.start_time).getDate()}</div>
+              </div>
+            </div>
+            
+            <div className="upcoming-details-section">
+              <div className="next-booking-badge">Next Booking</div>
+              <h3>{upcoming.turf_name}</h3>
+              <p>📍 {upcoming.location || 'Unknown Location'}</p>
+              <p>
+                {new Date(upcoming.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(upcoming.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
+              
+              <p style={{ marginTop: '10px' }}>Starts In</p>
+              <div className="countdown-container">
+                {timeLeft.days !== '00' && (
+                  <div className="countdown-item">
+                    <span className="countdown-val">{timeLeft.days}</span>
+                    <span className="countdown-label">DAYS</span>
+                  </div>
+                )}
+                <div className="countdown-item">
+                  <span className="countdown-val">{timeLeft.hrs}</span>
+                  <span className="countdown-label">HRS</span>
+                </div>
+                <div className="countdown-item">
+                  <span className="countdown-val">{timeLeft.min}</span>
+                  <span className="countdown-label">MIN</span>
+                </div>
+                <div className="countdown-item">
+                  <span className="countdown-val">{timeLeft.sec}</span>
+                  <span className="countdown-label">SEC</span>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -459,11 +570,35 @@ function App() {
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>To Pay Now</div>
             <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--primary-color)' }}>₹{payAdvance ? advanceAmount : total}</div>
           </div>
-          <button className="fbb-btn" onClick={handleBook} disabled={bookingLoading}>
-            {bookingLoading ? '...' : 'PROCEED'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="fbb-btn" style={{ background: '#334155' }} onClick={handleTeamBooking} disabled={bookingLoading}>
+              {bookingLoading ? '...' : 'TEAM SPLIT'}
+            </button>
+            <button className="fbb-btn" onClick={handleBook} disabled={bookingLoading}>
+              {bookingLoading ? '...' : 'PROCEED'}
+            </button>
+          </div>
         </div>
       </>
+    )
+  }
+
+  const renderSplitShare = () => {
+    const shareLink = `${window.location.origin}/split-pay/${splitSessionId}`
+    return (
+      <div style={{ padding: '20px', textAlign: 'center', marginTop: '50px' }}>
+        <h2 style={{ color: 'var(--primary-color)' }}>Team Session Created!</h2>
+        <p style={{ color: 'var(--text-secondary)' }}>Share this unique link with your friends to collect payments.</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>The slot is held in PENDING state for 15 minutes.</p>
+        
+        <div style={{ background: '#1e293b', padding: '15px', borderRadius: '10px', marginTop: '20px', wordBreak: 'break-all', fontFamily: 'monospace', color: '#fff' }}>
+          {shareLink}
+        </div>
+        
+        <button className="primary-btn" style={{ marginTop: '30px' }} onClick={() => { setView('bookings'); fetchData(); }}>
+          VIEW MY BOOKINGS
+        </button>
+      </div>
     )
   }
 
@@ -594,6 +729,7 @@ function App() {
       {view === 'overview' && renderOverview()}
       {view === 'slots' && renderSlots()}
       {view === 'checkout' && renderCheckout()}
+      {view === 'split-share' && renderSplitShare()}
       {view === 'success' && renderSuccess()}
       {view === 'bookings' && renderBookings()}
       {view === 'booking-details' && renderBookingDetails()}
