@@ -44,6 +44,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type TeamSessionRequest struct {
+	SlotID      string  `json:"slot_id"`
+	TargetAmount float64 `json:"target_amount"`
+}
+
 type UserBooking struct {
 	BookingID string `json:"booking_id"`
 	TurfName  string `json:"turf_name"`
@@ -100,6 +105,21 @@ func main() {
 		log.Fatalf("Failed to ping database: %v\n", err)
 	}
 	fmt.Println("✅ Successfully connected to PostgreSQL database!")
+
+	// Minimal Stage 3 feature: Create team_sessions table if not exists
+	_, err = dbPool.Exec(context.Background(), `
+		CREATE TABLE IF NOT EXISTS team_sessions (
+			id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+			slot_id UUID REFERENCES slots(id) ON DELETE CASCADE,
+			status VARCHAR(50) DEFAULT 'PENDING',
+			target_amount DECIMAL(10,2) NOT NULL,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL
+		)
+	`)
+	if err != nil {
+		log.Fatalf("Failed to create team_sessions table: %v\n", err)
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -168,9 +188,10 @@ func main() {
 	r.Get("/api/slots", func(w http.ResponseWriter, req *http.Request) {
 		query := `
 			SELECT s.id, s.turf_id, s.start_time, s.end_time, 
-			       CASE WHEN b.id IS NOT NULL THEN true ELSE false END as is_booked
+			       CASE WHEN (b.id IS NOT NULL) OR (ts.id IS NOT NULL) THEN true ELSE false END as is_booked
 			FROM slots s
 			LEFT JOIN bookings b ON s.id = b.slot_id AND b.status = 'CONFIRMED'
+			LEFT JOIN team_sessions ts ON s.id = ts.slot_id AND ts.status = 'PENDING' AND ts.expires_at > NOW()
 		`
 		rows, err := dbPool.Query(context.Background(), query)
 		if err != nil {
@@ -208,6 +229,18 @@ func main() {
 				return
 			}
 
+			// Block if there is an active pending team session for this slot
+			var activeSession int
+			dbPool.QueryRow(context.Background(), 
+				"SELECT 1 FROM team_sessions WHERE slot_id = $1 AND status = 'PENDING' AND expires_at > NOW()", b.SlotID).Scan(&activeSession)
+			
+			if activeSession == 1 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(`{"error": "SLOT_ALREADY_BOOKED", "message": "Slot is already reserved by a pending team session."}`))
+				return
+			}
+
 			_, err := dbPool.Exec(context.Background(), 
 				"INSERT INTO bookings (user_id, slot_id, status) VALUES ($1, $2, 'CONFIRMED')", 
 				userID, b.SlotID)
@@ -228,6 +261,62 @@ func main() {
 			w.Write([]byte(`{"status": "SUCCESS", "message": "Booking Confirmed!"}`))
 		})
 
+		r.Post("/api/team-sessions", func(w http.ResponseWriter, req *http.Request) {
+			userID := req.Context().Value("user_id").(string)
+			
+			var tsReq TeamSessionRequest
+			if err := json.NewDecoder(req.Body).Decode(&tsReq); err != nil {
+				http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+				return
+			}
+
+			if tsReq.SlotID == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error": "INVALID_INPUT", "message": "slot_id is required"}`))
+				return
+			}
+
+			if tsReq.TargetAmount <= 0 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error": "INVALID_INPUT", "message": "target_amount must be greater than zero"}`))
+				return
+			}
+
+			// Atomic check and insert using a CTE locking the slot row to prevent concurrent race conditions
+			query := `
+			WITH locked_slot AS (
+				SELECT id FROM slots WHERE id = $2 FOR UPDATE
+			)
+			INSERT INTO team_sessions (user_id, slot_id, target_amount, expires_at)
+			SELECT $1, $2, $3, NOW() + INTERVAL '15 minutes'
+			FROM locked_slot
+			WHERE NOT EXISTS (SELECT 1 FROM bookings WHERE slot_id = $2 AND status = 'CONFIRMED')
+			  AND NOT EXISTS (SELECT 1 FROM team_sessions WHERE slot_id = $2 AND status = 'PENDING' AND expires_at > NOW())
+			RETURNING id
+			`
+			
+			var sessionID string
+			err := dbPool.QueryRow(context.Background(), query, userID, tsReq.SlotID, tsReq.TargetAmount).Scan(&sessionID)
+			
+			if err != nil {
+				// If no row is returned, it means the slot was already booked or pending
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte(`{"error": "SLOT_UNAVAILABLE", "message": "Slot is already confirmed or has an active pending team session."}`))
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]string{
+				"status":     "PENDING",
+				"session_id": sessionID,
+				"message":    "Team booking session created successfully. Expires in 15 minutes.",
+			})
+		})
+
 		r.Get("/api/user/bookings", func(w http.ResponseWriter, req *http.Request) {
 			userID := req.Context().Value("user_id").(string)
 			
@@ -237,7 +326,13 @@ func main() {
 				JOIN slots s ON b.slot_id = s.id
 				JOIN turfs t ON s.turf_id = t.id
 				WHERE b.user_id = $1
-				ORDER BY s.start_time DESC
+				UNION ALL
+				SELECT ts.id, t.name, t.location, s.start_time, s.end_time, ts.status
+				FROM team_sessions ts
+				JOIN slots s ON ts.slot_id = s.id
+				JOIN turfs t ON s.turf_id = t.id
+				WHERE ts.user_id = $1
+				ORDER BY start_time DESC
 			`
 			rows, err := dbPool.Query(context.Background(), query, userID)
 			if err != nil {

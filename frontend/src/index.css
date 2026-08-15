@@ -360,3 +360,160 @@ body {
 .login-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
 .login-card { background: var(--card-bg); width: 100%; max-width: 400px; padding: 30px; border-radius: 20px; }
 .input-field { width: 100%; padding: 15px; margin-bottom: 20px; border-radius: 10px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: white; }
+
+/* NEW HOME DESIGN */
+.welcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(186, 240, 75, 0.1);
+  border: 1px solid rgba(186, 240, 75, 0.3);
+  color: var(--primary-color);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.home-epic-title {
+  font-size: 42px;
+  line-height: 1.1;
+  font-weight: 800;
+  margin-bottom: 30px;
+  letter-spacing: -1px;
+}
+.home-epic-title span {
+  color: var(--primary-color);
+}
+
+.home-search-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px;
+  padding: 5px;
+  padding-left: 20px;
+  margin-bottom: 40px;
+}
+.home-search-bar input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 16px;
+  outline: none;
+}
+.home-search-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(186, 240, 75, 0.3);
+}
+
+.upcoming-full-card {
+  display: flex;
+  background: var(--card-bg);
+  border-radius: 24px;
+  overflow: hidden;
+  height: 220px;
+  max-width: 450px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.upcoming-img-section {
+  width: 40%;
+  position: relative;
+}
+.upcoming-img-section img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.upcoming-date-badge {
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  background: #0f172a;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  padding: 10px 15px;
+  text-align: center;
+}
+.upcoming-date-badge .month {
+  font-size: 10px;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.upcoming-date-badge .day {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  color: white;
+  margin-top: 2px;
+}
+
+.upcoming-details-section {
+  width: 60%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.next-booking-badge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(186, 240, 75, 0.1);
+  color: var(--primary-color);
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.upcoming-details-section h3 {
+  margin: 15px 0 5px 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.upcoming-details-section p {
+  margin: 0 0 5px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.countdown-container {
+  display: flex;
+  gap: 15px;
+  margin-top: auto;
+}
+.countdown-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.countdown-val {
+  color: var(--primary-color);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+.countdown-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
