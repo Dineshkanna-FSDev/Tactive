@@ -174,7 +174,7 @@ function App() {
 
   // --- COMPONENTS ---
   const BottomNav = () => (
-    <div className="bottom-nav">
+    <div className="bottom-nav nav-bar">
       <div className={`nav-item ${view === 'home' ? 'active' : ''}`} onClick={() => setView('home')}>
         <div style={{ fontSize: '20px' }}>🏠</div> Home
       </div>
@@ -196,9 +196,9 @@ function App() {
         <div className="login-card">
           <h2 style={{ textAlign: 'center', margin: '0 0 30px 0', fontSize: '28px' }}>TURF<span style={{ color: 'var(--primary-color)' }}>BAY</span></h2>
           <form onSubmit={handleLogin}>
-            <input type="email" placeholder="Email Address" className="input-field" value={email} onChange={e => setEmail(e.target.value)} required />
+            <input type="email" placeholder="Email" className="input-field" value={email} onChange={e => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" className="input-field" value={password} onChange={e => setPassword(e.target.value)} required />
-            <button type="submit" className="fbb-btn" style={{ width: '100%' }} disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
+            <button type="submit" className="fbb-btn" style={{ width: '100%' }} disabled={loading}>{loading ? 'Signing in...' : 'Login'}</button>
           </form>
           {toast && <div style={{ color: '#ff5a5f', textAlign: 'center', marginTop: '15px' }}>{toast.message}</div>}
         </div>
@@ -295,7 +295,7 @@ function App() {
         </div>
         <div className="turf-scroll-row">
           {turfs.slice(0,4).map((turf, i) => (
-            <div key={turf.id} className="turf-card-home" onClick={() => { setSelectedTurf({...turf, imageIndex: i}); setView('overview') }}>
+            <div key={turf.id} className="turf-card-home turf-card" onClick={() => { setSelectedTurf({...turf, imageIndex: i}); setView('overview') }}>
               <div className="badge-overlay">{getSportType(i)}</div>
               <img src={getTurfImage(i)} alt={turf.name} className="turf-image" />
               <div className="turf-info">
@@ -425,7 +425,7 @@ function App() {
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Starting from</div>
             <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--primary-color)' }}>₹{selectedTurf.price_per_hour}/hour</div>
           </div>
-          <button className="fbb-btn" onClick={() => setView('slots')}>📅 Book Now</button>
+          <button className="fbb-btn" onClick={() => setView('slots')}>📅 BOOK NOW</button>
         </div>
       </>
     )
@@ -498,7 +498,7 @@ function App() {
             const timeStr = new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             const isSelected = selectedSlot?.id === slot.id
             return (
-              <div key={slot.id} className={`slot-item ${isSelected ? 'active' : ''} ${slot.is_booked ? 'disabled' : ''}`}
+              <div key={slot.id} className={`slot slot-item ${isSelected ? 'active' : ''} ${slot.is_booked ? 'disabled booked' : ''}`}
                 onClick={() => { if (!slot.is_booked) { setSelectedSlot(slot) } }}
               >
                 {timeStr}
@@ -621,8 +621,8 @@ function App() {
                     <h4>{b.turf_name}</h4>
                     <p>📍 {b.location}</p>
                   </div>
-                  <div className={`bk-status ${isCancelled ? 'cancelled' : isPartial ? 'partial' : 'full'}`}>
-                    {isCancelled ? 'CANCELLED' : isPartial ? 'PARTIAL' : 'FULL PAID'}
+                  <div className={`bk-status ${b.status === 'CANCELLED' ? 'cancelled' : b.status === 'PENDING' ? 'partial' : 'full'}`}>
+                    {b.status === 'PENDING' ? 'PENDING' : b.status === 'CANCELLED' ? 'CANCELLED' : 'FULL PAID'}
                   </div>
                 </div>
                 <div className="bk-body">
