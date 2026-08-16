@@ -14,7 +14,7 @@ Tactive is a full-stack platform for finding, booking, and splitting payments fo
 The fastest and most robust way to run Tactive is via Docker.
 
 ```bash
-git clone <your-repo-url>
+git clone < https://github.com/Dineshkanna-FSDev/Tactive.git >
 cd Tactive
 docker-compose up --build -d
 ```
